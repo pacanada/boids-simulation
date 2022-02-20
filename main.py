@@ -201,11 +201,11 @@ class UI:
         # Window variables
         self.n_boids = 500
         self.scale_boids = 2
-        self.distance = 10
+        self.distance = 200
         self.alignment_coef = 0.8
         self.cohesion_coef = 0.8
-        self.separation_coef = 0.8
-        self.max_d = 100
+        self.separation_coef = 0.1
+        self.max_d = 20
 
     def render(self):
         imgui.render()
