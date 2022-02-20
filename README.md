@@ -19,4 +19,5 @@ Run main script:
 ```python
 python main.py
 ```
-[![Watch the video](https://youtu.be/vi/xzHkp6OICtc/default.jpg)](https://youtu.be/xzHkp6OICtcQ)
+
+[![Watch the video](https://img.youtube.com/vi/xzHkp6OICtc/0.jpg)](https://youtu.be/xzHkp6OICtcQ)
