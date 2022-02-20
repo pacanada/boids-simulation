@@ -3,7 +3,7 @@
 
 Boids simulation (http://www.red3d.com/cwr/boids/).
 
-It is not ideal to use python for high demanding graphics, and lets not say for $$O(n^2)$$ simulations. I found a decent setup by combining `pyglet` for the graphics, `imgui` for the user interface and `numba` to speed up the calculations. Tested on M1 through rosetta 2.
+It is not ideal to use python for high demanding graphics, and lets not say for <img src="https://render.githubusercontent.com/render/math?math=O(n^2)"> simulations. I found a decent setup by combining `pyglet` for the graphics, `imgui` for the user interface and `numba` to speed up the calculations. Tested on M1 through rosetta 2.
 
 
 https://youtu.be/xzHkp6OICtc
