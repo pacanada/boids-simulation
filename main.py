@@ -1,11 +1,12 @@
-from typing import Tuple
-import pyglet
-import imgui
-import imgui.core
-from imgui.integrations.pyglet import PygletFixedPipelineRenderer
+from typing import List, Tuple
 import random
 import numpy as np
 from numba import jit
+from base.simulation import Simulation
+from base.app import App
+from base.ui import UI, UISetting, UISettings
+from pyglet.window import Window
+import pyglet
 
 
 @jit(nopython=True)
@@ -103,31 +104,17 @@ def update_vectors(
     return x, y, dx, dy
 
 
-class Simulation:
-    def __init__(
-        self,
-        n_boids,
-        width,
-        height,
-        distance,
-        alignment_coef,
-        cohesion_coef,
-        separation_coef,
-        scale_boids,
-        max_d,
-    ):
-        self.n_boids = n_boids
+class SimulationBoids(Simulation):
+    def __init__(self, settings: UISettings, height: int, width: int) -> None:
+        self.settings = settings
         self.width = width
         self.height = height
-        self.distance = distance
-        self.scale_boids = scale_boids
-        self.alignment_coef = alignment_coef
-        self.cohesion_coef = cohesion_coef
-        self.separation_coef = separation_coef
-        self.max_d = max_d
-        self.scale = 1
-        self.x = np.random.random(self.n_boids) * self.width
-        self.y = np.random.random(self.n_boids) * self.height
+        self.init_simulation()
+
+    def init_simulation(self):
+        """To be called when any change in the settings is made and we want to launch a new simulation without restarting the app."""
+        self.x = np.random.random(self.settings.get_value("n_boids")) * self.width
+        self.y = np.random.random(self.settings.get_value("n_boids")) * self.height
         self.dx = np.random.uniform(
             -self.width / 100, self.width / 100, size=self.x.size
         )
@@ -136,12 +123,12 @@ class Simulation:
         )
         self.boids = []
         self.batch = pyglet.graphics.Batch()
-        for boid_index in range(n_boids):
+        for boid_index in range(self.settings.get_value("n_boids")):
             self.boids.append(
                 pyglet.shapes.Circle(
                     x=self.x[boid_index],
                     y=self.y[boid_index],
-                    radius=self.scale_boids,
+                    radius=self.settings.get_value("scale_boids"),
                     color=(
                         random.randint(0, 255),
                         random.randint(0, 255),
@@ -151,152 +138,117 @@ class Simulation:
                 )
             )
 
-    def update_params(
-        self,
-        alignment_coef,
-        cohesion_coef,
-        separation_coef,
-        scale_boids,
-        max_d,
-        distance,
-    ):
-        self.alignment_coef = alignment_coef
-        self.cohesion_coef = cohesion_coef
-        self.separation_coef = separation_coef
-        self.scale_boids = scale_boids
-        self.max_d = max_d
-        self.distance = distance
-
     def update(self, dt):
         self.x, self.y, self.dx, self.dy = update_vectors(
             x=self.x,
             y=self.y,
             dx=self.dx,
             dy=self.dy,
-            distance=self.distance,
-            c_a=self.alignment_coef,
-            c_c=self.cohesion_coef,
-            c_s=self.separation_coef,
+            distance=self.settings.get_value("distance"),
+            c_a=self.settings.get_value("alignment_coef"),
+            c_c=self.settings.get_value("cohesion_coef"),
+            c_s=self.settings.get_value("separation_coef"),
             dt=dt,
-            max_d=self.max_d,
+            max_d=self.settings.get_value("max_d"),
             width=self.width,
             height=self.height,
         )
 
-        for boid_index in range(self.n_boids):
+        for boid_index in range(len(self.boids)):
             self.boids[boid_index].x = self.x[boid_index]
             self.boids[boid_index].y = self.y[boid_index]
 
     def draw(self):
+        if self.settings.get_changed("n_boids"):
+            self.init_simulation()
         self.batch.draw()
 
 
-class UI:
-    def __init__(self, window):
-        imgui.create_context()
-        self.impl = PygletFixedPipelineRenderer(window)
-        imgui.new_frame()
-        imgui.end_frame()
+settings = UISettings(
+    [
+        UISetting(
+            dtype="int",
+            type="input",
+            value=10,
+            name="n_boids",
+            description="Number of boids",
+        ),
+        UISetting(
+            dtype="float",
+            type="slider",
+            value=1,
+            min=0,
+            max=1000,
+            step=1,
+            format="%.0f",
+            name="distance",
+            description="Distance between boids",
+        ),
+        UISetting(
+            dtype="float",
+            type="slider",
+            value=1,
+            min=0,
+            max=1,
+            step=1,
+            format="%.2f",
+            name="alignment_coef",
+            description="Alignment coef",
+        ),
+        UISetting(
+            dtype="float",
+            type="slider",
+            value=1,
+            min=0,
+            max=1,
+            step=1,
+            format="%.2f",
+            name="cohesion_coef",
+            description="Cohesion coef",
+        ),
+        UISetting(
+            dtype="float",
+            type="slider",
+            value=1,
+            min=0,
+            max=1,
+            step=1,
+            format="%.2f",
+            name="separation_coef",
+            description="Separation coef",
+        ),
+        UISetting(
+            dtype="float",
+            type="slider",
+            value=1,
+            min=0,
+            max=100,
+            step=1,
+            format="%.0f",
+            name="max_d",
+            description="Max speed",
+        ),
+        UISetting(
+            dtype="float",
+            type="slider",
+            value=1,
+            min=0,
+            max=5,
+            step=1,
+            format="%.0f",
+            name="scale_boids",
+            description="Scale",
+        ),
+    ]
+)
 
-        # Window variables
-        self.n_boids = 500
-        self.scale_boids = 2
-        self.distance = 200
-        self.alignment_coef = 0.8
-        self.cohesion_coef = 0.8
-        self.separation_coef = 0.1
-        self.max_d = 20
-
-    def render(self):
-        imgui.render()
-        self.impl.render(imgui.get_draw_data())
-        imgui.new_frame()
-
-        imgui.begin("Window")
-        imgui.text("This is the test window.")
-        self.n_boids_changed, self.n_boids = imgui.input_int(
-            "Number of boids", self.n_boids
-        )
-        self.scale_boids_changed, self.scale_boids = imgui.input_float(
-            "Scale of boids", self.scale_boids
-        )
-        self.distance_changed, self.distance = imgui.input_float(
-            "Distance", self.distance
-        )
-        self.alignment_changed, self.alignment_coef = imgui.slider_float(
-            "alignment coef", self.alignment_coef, 0.0, 2.0, "%.2f", 1.0
-        )
-        self.cohesion_changed, self.cohesion_coef = imgui.slider_float(
-            "cohesion coef", self.cohesion_coef, 0.0, 2.0, "%.2f", 1.0
-        )
-        self.separation_changed, self.separation_coef = imgui.slider_float(
-            "separation coef", self.separation_coef, 0.0, 2.0, "%.2f", 1.0
-        )
-        self.max_d_changed, self.max_d = imgui.input_float("max vel", self.max_d)
-
-        imgui.end()
-
-        imgui.end_frame()
-
-
-class App(pyglet.window.Window):
-    def __init__(self, width, height):
-        super().__init__(width, height, "Boids", resizable=True)
-        self.set_vsync(False)
-        pyglet.clock.schedule_interval(self.update, 1 / 60)
-        self.fps_display = pyglet.window.FPSDisplay(window=self)
-        self.UI = UI(self)
-        self.simulation = Simulation(
-            width=self.width,
-            height=self.height,
-            scale_boids=self.UI.scale_boids,
-            n_boids=self.UI.n_boids,
-            distance=self.UI.distance,
-            alignment_coef=self.UI.alignment_coef,
-            cohesion_coef=self.UI.cohesion_coef,
-            separation_coef=self.UI.separation_coef,
-            max_d=self.UI.max_d,
-        )
-
-    def on_draw(self):
-        self.fps_display.draw()
-        self.simulation.draw()
-
-    def update(self, dt):
-        self.clear()
-        self.UI.render()
-        if (
-            self.UI.scale_boids_changed
-            or self.UI.distance_changed
-            or self.UI.alignment_changed
-            or self.UI.cohesion_changed
-            or self.UI.max_d_changed
-            or self.UI.separation_changed
-        ):
-            self.simulation.update_params(
-                alignment_coef=self.UI.alignment_coef,
-                cohesion_coef=self.UI.cohesion_coef,
-                separation_coef=self.UI.separation_coef,
-                scale_boids=self.UI.scale_boids,
-                max_d=self.UI.max_d,
-                distance=self.UI.distance,
-            )
-        elif self.UI.n_boids_changed:
-            self.simulation = Simulation(
-                width=self.width,
-                height=self.height,
-                scale_boids=self.UI.scale_boids,
-                n_boids=self.UI.n_boids,
-                distance=self.UI.distance,
-                alignment_coef=self.UI.alignment_coef,
-                cohesion_coef=self.UI.cohesion_coef,
-                separation_coef=self.UI.separation_coef,
-                max_d=self.UI.max_d,
-            )
-        else:
-            self.simulation.update(dt)
-            self.simulation.draw()
-
-
-app = App(1000, 800)
+WIDTH = 1000
+HEIGHT = 1000
+app = App(
+    width=WIDTH,
+    height=HEIGHT,
+    settings=settings,
+    simulation=SimulationBoids(width=WIDTH, height=HEIGHT, settings=settings),
+    dt=1 / 60,
+)
 pyglet.app.run()
