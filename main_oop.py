@@ -11,6 +11,8 @@ spec = [
     ("dy", float32),
     ("distance", float32),
 ]
+
+
 # super slow
 @jitclass(spec)
 class Boid(object):
@@ -27,7 +29,7 @@ class Boid(object):
         y_avg = 0
         for boid in boids:
             dist2 = (self.x - boid.x) ** 2 + (self.y - boid.y) ** 2
-            if dist2 <= self.distance ** 2 and dist2 != 0:
+            if dist2 <= self.distance**2 and dist2 != 0:
                 len += 1
                 x_avg += boid.x
                 y_avg += boid.y
@@ -48,7 +50,7 @@ class Boid_std(object):
         y_avg = 0
         for boid in boids:
             dist2 = (self.x - boid.x) ** 2 + (self.y - boid.y) ** 2
-            if dist2 <= self.distance ** 2 and dist2 != 0:
+            if dist2 <= self.distance**2 and dist2 != 0:
                 len += 1
                 x_avg += boid.x
                 y_avg += boid.y

@@ -8,6 +8,8 @@ from base.ui import UI, UISetting, UISettings
 from pyglet.window import Window
 import pyglet
 
+# TODO: problem with the dt and frames?
+
 
 @jit(nopython=True)
 def get_indexes_of_group(
@@ -16,9 +18,25 @@ def get_indexes_of_group(
     list_indexes = []
     for index in range(len(x)):
         distance2 = (x[index_boid] - x[index]) ** 2 + (y[index_boid] - y[index]) ** 2
-        if (index != index_boid) and (distance2 < distance ** 2):
+        if (index != index_boid) and (distance2 < distance**2):
             list_indexes.append(index)
     return np.array(list_indexes)
+
+
+# @jit(nopython=True)
+# def get_indexes_of_group(
+#     index_boid: int, x: np.array, y: np.array, dx: np.array, dy: np.array, distance: float, view_angle: float
+# ) -> np.array:
+#     list_indexes = []
+#     for index in range(len(x)):
+#         distance2 = (x[index_boid] - x[index]) ** 2 + (y[index_boid] - y[index]) ** 2
+#         if (index != index_boid) and (distance2 < distance ** 2):
+#         #if (distance2 <= distance ** 2):
+#             if is_within_view_angle(
+#                 x[index_boid], y[index_boid], x[index], y[index], dx[index_boid], dy[index_boid], view_angle
+#             ):
+#                 list_indexes.append(index)
+#     return np.array(list_indexes)
 
 
 @jit(nopython=True)
@@ -50,12 +68,35 @@ def get_dist2diff(
 
 
 @jit(nopython=True)
+def is_within_view_angle(
+    current_boid_x, current_boid_y, neighbor_boid_x, neighbor_boid_y, dx, dy, view_angle
+):
+    # Calculate the direction vector of the current boid
+    direction_vector = np.array([dx, dy])
+    direction_vector /= np.linalg.norm(direction_vector)  # Normalize the vector
+
+    # Calculate the vector pointing to the neighbor boid
+    neighbor_vector = np.array(
+        [neighbor_boid_x - current_boid_x, neighbor_boid_y - current_boid_y]
+    )
+    neighbor_vector /= np.linalg.norm(neighbor_vector)  # Normalize the vector
+
+    # Calculate the angle between the two vectors using dot product
+    dot_product = np.dot(direction_vector, neighbor_vector)
+    angle = np.arccos(dot_product)
+
+    # Check if the angle is within the view angle
+    return -view_angle / 2 <= angle <= view_angle / 2
+
+
+@jit(nopython=True)
 def update_vectors(
     x: np.array,
     y: np.array,
     dx: np.array,
     dy: np.array,
     distance: float,
+    view_angle: float,
     c_a: float,
     c_c: float,
     c_s: float,
@@ -73,27 +114,39 @@ def update_vectors(
 
     for boid_index in range(len(x)):
         # get average
-        flock_indexes = get_indexes_of_group(boid_index, x, y, distance)
-        x_avg[boid_index] = get_avg_of_indexes(flock_indexes, x)
-        y_avg[boid_index] = get_avg_of_indexes(flock_indexes, y)
-        dx_avg[boid_index] = get_avg_of_indexes(flock_indexes, dx)
-        dy_avg[boid_index] = get_avg_of_indexes(flock_indexes, dy)
+        flock_indexes = get_indexes_of_group(
+            index_boid=boid_index, x=x, y=y, distance=distance
+        )
+        # flock_indexes = get_indexes_of_group(index_boid=boid_index, x=x, y=y, distance=distance, dx=dx, dy=dy, view_angle=view_angle)
+        # print("flock indexes", flock_indexes)
+        x_avg[boid_index] = get_avg_of_indexes(indexes=flock_indexes, vector=x)
+        y_avg[boid_index] = get_avg_of_indexes(indexes=flock_indexes, vector=y)
+        dx_avg[boid_index] = get_avg_of_indexes(indexes=flock_indexes, vector=dx)
+        dy_avg[boid_index] = get_avg_of_indexes(indexes=flock_indexes, vector=dy)
         dist2diff_x[boid_index], dist2diff_y[boid_index] = get_dist2diff(
-            flock_indexes, boid_index, x, y
+            indexes=flock_indexes, boid_index=boid_index, x=x, y=y
         )
 
     # check if it is the same dist2 = (x-x_avg)**2+(y-y_avg)**2
     # update vectors
-    dx += (c_a * (dx_avg - dx) + c_c * (x_avg - x) + c_s * dist2diff_x * 100) * dt
+    # print("Everything: c_a=",c_a)
+    # TODO: cohesion makes them go to 0,0
+    dx += (c_a * (dx_avg - dx) + c_c * (x_avg - x) + c_s * dist2diff_x) * dt
     x += dx
-    dy += (c_a * (dy_avg - dy) + c_c * (y_avg - y) + c_s * dist2diff_y * 100) * dt
+    dy += (c_a * (dy_avg - dy) + c_c * (y_avg - y) + c_s * dist2diff_y) * dt
     y += dy
 
+    # make them bounce
+    dx[x > width] *= -1
+    dx[x < 0] *= -1
+    dy[y > height] *= -1
+    dy[y < 0] *= -1
+
     # move to the other side of the window
-    x[x > width] -= width
-    x[x < 0] += width
-    y[y > height] -= height
-    y[y < 0] += height
+    # x[x > width] -= width
+    # x[x < 0] += width
+    # y[y > height] -= height
+    # y[y < 0] += height
 
     # limiting speed
     dx[dx > max_d] = max_d
@@ -145,6 +198,7 @@ class SimulationBoids(Simulation):
             dx=self.dx,
             dy=self.dy,
             distance=self.settings.get_value("distance"),
+            view_angle=self.settings.get_value("view_angle"),
             c_a=self.settings.get_value("alignment_coef"),
             c_c=self.settings.get_value("cohesion_coef"),
             c_s=self.settings.get_value("separation_coef"),
@@ -169,14 +223,14 @@ settings = UISettings(
         UISetting(
             dtype="int",
             type="input",
-            value=10,
+            value=1,
             name="n_boids",
             description="Number of boids",
         ),
         UISetting(
             dtype="float",
             type="slider",
-            value=1,
+            value=10,
             min=0,
             max=1000,
             step=1,
@@ -187,20 +241,20 @@ settings = UISettings(
         UISetting(
             dtype="float",
             type="slider",
-            value=1,
+            value=0.005,
             min=0,
-            max=1,
+            max=0.5,
             step=1,
-            format="%.2f",
+            format="%.3f",
             name="alignment_coef",
             description="Alignment coef",
         ),
         UISetting(
             dtype="float",
             type="slider",
-            value=1,
+            value=0.05,
             min=0,
-            max=1,
+            max=0.5,
             step=1,
             format="%.2f",
             name="cohesion_coef",
@@ -209,22 +263,22 @@ settings = UISettings(
         UISetting(
             dtype="float",
             type="slider",
-            value=1,
+            value=0.05,
             min=0,
-            max=1,
+            max=0.5,
             step=1,
-            format="%.2f",
+            format="%.3f",
             name="separation_coef",
             description="Separation coef",
         ),
         UISetting(
             dtype="float",
             type="slider",
-            value=1,
+            value=3,
             min=0,
-            max=100,
+            max=5,
             step=1,
-            format="%.0f",
+            format="%.2f",
             name="max_d",
             description="Max speed",
         ),
@@ -239,11 +293,22 @@ settings = UISettings(
             name="scale_boids",
             description="Scale",
         ),
+        UISetting(
+            dtype="float",
+            type="slider",
+            value=np.pi / 2,
+            min=0,
+            max=2 * np.pi,
+            step=1,
+            format="%.2f",
+            name="view_angle",
+            description="View angle",
+        ),
     ]
 )
 
 WIDTH = 1000
-HEIGHT = 1000
+HEIGHT = 800
 app = App(
     width=WIDTH,
     height=HEIGHT,
